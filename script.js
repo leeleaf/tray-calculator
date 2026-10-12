@@ -32,122 +32,208 @@ function setDefaults() {
   });
 }
 
-function computeScenario(inputs) {
+function computeSingleRowScenario(inputs) {
   const { trayLength, trayWidth, maxOverhang, itemLength, itemWidth } = inputs;
 
   const scenarios = [
     {
       name: '长边方向',
-      major: itemLength,
-      minor: itemWidth,
+      itemLength,
+      itemWidth,
+      rows: 1,
+      cols: 1,
+      type: '单排',
     },
     {
       name: '短边方向',
-      major: itemWidth,
-      minor: itemLength,
+      itemLength: itemWidth,
+      itemWidth: itemLength,
+      rows: 1,
+      cols: 1,
+      type: '单排',
     },
   ].map((scenario) => {
-    const xOverhang = Math.max(0, (scenario.major - trayLength) / 2);
-    const yOverhang = Math.max(0, (scenario.minor - trayWidth) / 2);
+    const majorLength = Math.max(scenario.itemLength, scenario.itemWidth);
+    const minorLength = Math.min(scenario.itemLength, scenario.itemWidth);
+    const xOverhang = Math.max(0, (majorLength - trayLength) / 2);
+    const yOverhang = Math.max(0, (minorLength - trayWidth) / 2);
     const withinLimit = xOverhang <= maxOverhang && yOverhang <= maxOverhang;
-    const totalFit =
-      scenario.major <= trayLength + maxOverhang * 2 &&
-      scenario.minor <= trayWidth + maxOverhang * 2;
-
-    const score =
-      (withinLimit ? 0 : 100000) +
-      xOverhang * 10 +
-      yOverhang * 10 +
-      (totalFit ? 0 : 50000);
 
     return {
       ...scenario,
       xOverhang,
       yOverhang,
       withinLimit,
-      totalFit,
-      score,
+      totalLength: majorLength,
+      totalWidth: minorLength,
+      score: (withinLimit ? 0 : 100000) + xOverhang * 10 + yOverhang * 10,
     };
   });
 
-  scenarios.sort((a, b) => a.score - b.score);
-  const best = scenarios[0];
+  return scenarios;
+}
 
-  return {
-    best,
-    scenarios,
-  };
+function computeMultiRowScenario(inputs) {
+  const { trayLength, trayWidth, maxOverhang, itemLength, itemWidth } = inputs;
+
+  const baseOptions = [
+    {
+      name: '长边×2排',
+      itemLength,
+      itemWidth,
+      rows: 2,
+      cols: 1,
+      type: '多排',
+    },
+    {
+      name: '短边×2排',
+      itemLength: itemWidth,
+      itemWidth: itemLength,
+      rows: 2,
+      cols: 1,
+      type: '多排',
+    },
+  ];
+
+  return baseOptions.map((scenario) => {
+    const totalLength = scenario.itemLength;
+    const totalWidth = scenario.itemWidth * scenario.rows;
+    const xOverhang = Math.max(0, (totalLength - trayLength) / 2);
+    const yOverhang = Math.max(0, (totalWidth - trayWidth) / 2);
+    const withinLimit = xOverhang <= maxOverhang && yOverhang <= maxOverhang;
+
+    return {
+      ...scenario,
+      totalLength,
+      totalWidth,
+      xOverhang,
+      yOverhang,
+      withinLimit,
+      score: (withinLimit ? 0 : 100000) + xOverhang * 10 + yOverhang * 10,
+    };
+  });
+}
+
+function computeScenario(inputs) {
+  const singleRowScenarios = computeSingleRowScenario(inputs);
+  const multiRowScenarios = computeMultiRowScenario(inputs);
+  const allScenarios = [...singleRowScenarios, ...multiRowScenarios];
+
+  allScenarios.sort((a, b) => a.score - b.score);
+  const best = allScenarios[0];
+
+  return { best, scenarios: allScenarios };
 }
 
 function updateSummary(best, inputs) {
   const { trayLength, trayWidth, maxOverhang } = inputs;
-  const text = `托盘 ${trayLength}×${trayWidth} mm，允许单边最大超出 ${maxOverhang} mm。` +
+  let text = `托盘 ${trayLength}×${trayWidth} mm，允许单边最大超出 ${maxOverhang} mm。` +
     `推荐采用“${best.name}”：` +
     `货物长度方向超出 ${best.xOverhang.toFixed(0)} mm，宽度方向超出 ${best.yOverhang.toFixed(0)} mm。`;
+
+  if (best.type === '多排') {
+    text += `（${best.rows}排摆放）`;
+  }
 
   summaryTextEl.textContent = text;
 }
 
 function drawDiagram(best, inputs) {
   const { trayLength, trayWidth } = inputs;
-  const maxDim = Math.max(trayLength, trayWidth, best.major, best.minor);
-  const scale = 420 / maxDim;
+  const maxLength = Math.max(trayLength, trayWidth, best.totalLength || best.itemLength, best.totalWidth || best.itemWidth);
+  const scale = 420 / maxLength;
   const padding = 56;
 
   const trayWidthPx = trayLength * scale;
   const trayHeightPx = trayWidth * scale;
-  const itemWidthPx = best.major * scale;
-  const itemHeightPx = best.minor * scale;
 
   const trayX = padding;
   const trayY = 120;
 
-  const itemX = trayX + (trayWidthPx - itemWidthPx) / 2;
-  const itemY = trayY + (trayHeightPx - itemHeightPx) / 2;
+  const itemX = trayX + (trayWidthPx - (best.totalLength || best.itemLength) * scale) / 2;
+  const itemY = trayY + (trayHeightPx - (best.totalWidth || best.itemWidth) * scale) / 2;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   ctx.fillStyle = '#f7fafd';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // tray
+  // 托盘
   ctx.fillStyle = '#dfeeff';
   ctx.strokeStyle = '#2b6eea';
   ctx.lineWidth = 2;
   ctx.fillRect(trayX, trayY, trayWidthPx, trayHeightPx);
   ctx.strokeRect(trayX, trayY, trayWidthPx, trayHeightPx);
 
-  // item
-  ctx.fillStyle = '#fde7c8';
-  ctx.strokeStyle = '#d97706';
-  ctx.lineWidth = 2;
-  ctx.fillRect(itemX, itemY, itemWidthPx, itemHeightPx);
-  ctx.strokeRect(itemX, itemY, itemWidthPx, itemHeightPx);
+  // 货物 - 按多排或单排处理
+  if (best.type === '多排') {
+    const itemLenPx = best.itemLength * scale;
+    const itemWidPx = best.itemWidth * scale;
+    const totalWidthPx = best.totalWidth * scale;
 
-  // overhang highlight
-  const leftOverhangPx = Math.max(0, (best.major - trayLength) * scale / 2);
-  const rightOverhangPx = Math.max(0, (best.major - trayLength) * scale / 2);
-  const topOverhangPx = Math.max(0, (best.minor - trayWidth) * scale / 2);
-  const bottomOverhangPx = Math.max(0, (best.minor - trayWidth) * scale / 2);
+    for (let i = 0; i < best.rows; i++) {
+      const rowY = itemY + i * itemWidPx;
+      ctx.fillStyle = '#fde7c8';
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 2;
+      ctx.fillRect(itemX, rowY, itemLenPx, itemWidPx);
+      ctx.strokeRect(itemX, rowY, itemLenPx, itemWidPx);
+    }
 
-  if (leftOverhangPx > 0) {
-    ctx.fillStyle = '#ffd29d';
-    ctx.fillRect(itemX - leftOverhangPx, itemY, leftOverhangPx, itemHeightPx);
-  }
-  if (rightOverhangPx > 0) {
-    ctx.fillStyle = '#ffd29d';
-    ctx.fillRect(itemX + itemWidthPx, itemY, rightOverhangPx, itemHeightPx);
-  }
-  if (topOverhangPx > 0) {
-    ctx.fillStyle = '#ffd29d';
-    ctx.fillRect(itemX, itemY - topOverhangPx, itemWidthPx, topOverhangPx);
-  }
-  if (bottomOverhangPx > 0) {
-    ctx.fillStyle = '#ffd29d';
-    ctx.fillRect(itemX, itemY + itemHeightPx, itemWidthPx, bottomOverhangPx);
+    const leftOverhangPx = Math.max(0, (best.itemLength - trayLength) * scale / 2);
+    const rightOverhangPx = Math.max(0, (best.itemLength - trayLength) * scale / 2);
+    const topOverhangPx = Math.max(0, (best.totalWidth - trayWidth) * scale / 2);
+    const bottomOverhangPx = Math.max(0, (best.totalWidth - trayWidth) * scale / 2);
+
+    if (leftOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX - leftOverhangPx, itemY, leftOverhangPx, totalWidthPx);
+    }
+    if (rightOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX + itemLenPx, itemY, rightOverhangPx, totalWidthPx);
+    }
+    if (topOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX, itemY - topOverhangPx, itemLenPx, topOverhangPx);
+    }
+    if (bottomOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX, itemY + totalWidthPx, itemLenPx, bottomOverhangPx);
+    }
+  } else {
+    const itemLenPx = best.itemLength * scale;
+    const itemWidPx = best.itemWidth * scale;
+
+    ctx.fillStyle = '#fde7c8';
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 2;
+    ctx.fillRect(itemX, itemY, itemLenPx, itemWidPx);
+    ctx.strokeRect(itemX, itemY, itemLenPx, itemWidPx);
+
+    const leftOverhangPx = Math.max(0, (best.itemLength - trayLength) * scale / 2);
+    const rightOverhangPx = Math.max(0, (best.itemLength - trayLength) * scale / 2);
+    const topOverhangPx = Math.max(0, (best.itemWidth - trayWidth) * scale / 2);
+    const bottomOverhangPx = Math.max(0, (best.itemWidth - trayWidth) * scale / 2);
+
+    if (leftOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX - leftOverhangPx, itemY, leftOverhangPx, itemWidPx);
+    }
+    if (rightOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX + itemLenPx, itemY, rightOverhangPx, itemWidPx);
+    }
+    if (topOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX, itemY - topOverhangPx, itemLenPx, topOverhangPx);
+    }
+    if (bottomOverhangPx > 0) {
+      ctx.fillStyle = '#ffd29d';
+      ctx.fillRect(itemX, itemY + itemWidPx, itemLenPx, bottomOverhangPx);
+    }
   }
 
-  // dimension text
+  // 标注尺寸
   ctx.fillStyle = '#20304b';
   ctx.font = 'bold 14px Microsoft YaHei';
   ctx.textAlign = 'center';
@@ -158,28 +244,20 @@ function drawDiagram(best, inputs) {
   ctx.fillText(`${trayWidth} mm`, 0, 0);
   ctx.restore();
 
+  const itemWidthPxDisplay = (best.totalLength || best.itemLength) * scale;
+  const itemHeightPxDisplay = (best.totalWidth || best.itemWidth) * scale;
   ctx.fillStyle = '#d97706';
-  ctx.fillText(`${best.major.toFixed(0)} mm`, itemX + itemWidthPx / 2, itemY + itemHeightPx + 22);
+  ctx.fillText(`${(best.totalLength || best.itemLength).toFixed(0)} mm`, itemX + itemWidthPxDisplay / 2, itemY + itemHeightPxDisplay + 22);
   ctx.save();
-  ctx.translate(itemX + itemWidthPx + 20, itemY + itemHeightPx / 2);
+  ctx.translate(itemX + itemWidthPxDisplay + 20, itemY + itemHeightPxDisplay / 2);
   ctx.rotate(Math.PI / 2);
-  ctx.fillText(`${best.minor.toFixed(0)} mm`, 0, 0);
+  ctx.fillText(`${(best.totalWidth || best.itemWidth).toFixed(0)} mm`, 0, 0);
   ctx.restore();
 
-  // overhang notes
-  ctx.fillStyle = '#d97706';
-  ctx.font = '12px Microsoft YaHei';
-  if (leftOverhangPx > 0) {
-    ctx.fillText(`左超出 ${best.xOverhang.toFixed(0)} mm`, itemX - leftOverhangPx - 42, itemY + itemHeightPx / 2);
-  }
-  if (rightOverhangPx > 0) {
-    ctx.fillText(`右超出 ${best.xOverhang.toFixed(0)} mm`, itemX + itemWidthPx + 12, itemY + itemHeightPx / 2);
-  }
-  if (topOverhangPx > 0) {
-    ctx.fillText(`上超出 ${best.yOverhang.toFixed(0)} mm`, itemX + itemWidthPx / 2, itemY - topOverhangPx - 8);
-  }
-  if (bottomOverhangPx > 0) {
-    ctx.fillText(`下超出 ${best.yOverhang.toFixed(0)} mm`, itemX + itemWidthPx / 2, itemY + itemHeightPx + bottomOverhangPx + 20);
+  if (best.type === '多排') {
+    ctx.fillStyle = '#16a34a';
+    ctx.font = 'bold 13px Microsoft YaHei';
+    ctx.fillText(`${best.rows} 排`, itemX - 40, itemY + itemHeightPxDisplay / 2);
   }
 }
 
@@ -188,7 +266,7 @@ function render() {
   const { best, scenarios } = computeScenario(inputs);
 
   recommendedLayoutEl.textContent = best.name;
-  fitStatusEl.textContent = best.withinLimit ? '满足' : '超限';
+  fitStatusEl.textContent = best.withinLimit ? '✓ 满足' : '✗ 超限';
   fitStatusEl.style.color = best.withinLimit ? '#16a34a' : '#dc2626';
   xOverhangEl.textContent = `${best.xOverhang.toFixed(0)} mm`;
   yOverhangEl.textContent = `${best.yOverhang.toFixed(0)} mm`;
