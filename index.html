@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>托盘摆放计算器</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="header">
+        <div class="title-wrap">
+          <p class="eyebrow">Tray Layout Calculator</p>
+          <h1>托盘摆放计算器</h1>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel control-panel">
+          <h2>参数设置</h2>
+
+          <form id="calculator-form" class="form-grid">
+            <div class="field">
+              <label for="trayLength">托盘长度 (mm)</label>
+              <input id="trayLength" type="number" min="1" value="1200" step="1" />
+            </div>
+
+            <div class="field">
+              <label for="trayWidth">托盘宽度 (mm)</label>
+              <input id="trayWidth" type="number" min="1" value="1000" step="1" />
+            </div>
+
+            <div class="field">
+              <label for="maxOverhang">单边最大超出 (mm)</label>
+              <input id="maxOverhang" type="number" min="0" value="250" step="1" />
+            </div>
+
+            <div class="field">
+              <label for="itemLength">物品长度 (mm)</label>
+              <input id="itemLength" type="number" min="1" value="1320" step="1" />
+            </div>
+
+            <div class="field">
+              <label for="itemWidth">物品宽度 (mm)</label>
+              <input id="itemWidth" type="number" min="1" value="550" step="1" step="1" />
+            </div>
+
+            <div class="actions">
+              <button type="submit" class="primary">计算布局</button>
+              <button type="button" id="resetBtn" class="secondary">重置</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel result-panel">
+          <h2>计算结果</h2>
+
+          <div class="result-grid">
+            <div class="metric-card success">
+              <span class="label">最佳摆放</span>
+              <strong id="recommendedLayout">-</strong>
+            </div>
+            <div class="metric-card warning">
+              <span class="label">是否满足要求</span>
+              <strong id="fitStatus">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="label">左右超出</span>
+              <strong id="xOverhang">-</strong>
+            </div>
+            <div class="metric-card">
+              <span class="label">上下超出</span>
+              <strong id="yOverhang">-</strong>
+            </div>
+          </div>
+
+          <div class="summary-box">
+            <p id="summaryText">请输入尺寸后点击“计算布局”。</p>
+          </div>
+        </section>
+      </main>
+
+      <section class="panel diagram-panel">
+        <div class="diagram-header">
+          <h2>摆放示意图</h2>
+          <div class="legend">
+            <span><i class="legend-box tray"></i>托盘</span>
+            <span><i class="legend-box item"></i>货物</span>
+            <span><i class="legend-box over"></i>超出区域</span>
+          </div>
+        </div>
+
+        <canvas id="layoutCanvas" width="900" height="620" aria-label="托盘摆放示意图"></canvas>
+      </section>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
+
